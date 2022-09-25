@@ -1,0 +1,108 @@
+-- normally this is 4 different scripts, i combined them for the sake of readability
+
+local remote = game.ReplicatedStorage.Forward
+
+remote.OnServerEvent:Connect(function(plr,carrier,speed)
+	local carrier_base = carrier.Base
+	local carrier_velocity = carrier_base.LinearVelocity
+	if speed == 0 then
+		carrier_velocity.VectorVelocity = Vector3.new(0,0,0) -- set speed to 0
+		carrier_velocity.Enabled = false
+	else
+		carrier_velocity.Enabled = true
+		carrier_velocity.VectorVelocity = carrier_base.CFrame.LookVector*speed -- set speed
+	end
+
+end)
+
+local remote = game.ReplicatedStorage.Turn
+remote.OnServerEvent:Connect(function(plr,degree,carrier)
+	--carrier.PrimaryPart.CFrame = carrier.PrimaryPart.CFrame * CFrame.Angles(0,math.rad(degree),0)
+	carrier.Base.BodyGyro.CFrame = carrier.PrimaryPart.CFrame * CFrame.Angles(0,math.rad(degree),0) -- change bodygyro by desired degrees
+end)
+
+local remote = game.ReplicatedStorage.TurretRotate
+remote.OnServerEvent:Connect(function(plr,carrier,targetcf)
+	for i,v in pairs(carrier.Turrets:GetChildren()) do -- do this for all the turrets
+		v.REALturret.BodyGyro.CFrame = targetcf
+	end
+end)
+
+local remote = game.ReplicatedStorage.TurretFire
+local module = game.ServerStorage.Battleship_module
+local bullethole = game.ServerStorage.BulletholeBIG
+local missile = game.ServerStorage.Missile
+local debris_service = game:GetService("Debris")
+local load_module = require(module)
+
+local function create_explosion(targetpos)
+	local exp = Instance.new("Explosion")
+	exp.Position = targetpos
+	exp.Parent = workspace
+	exp.BlastPressure = 0 -- to not break welds
+	exp.Hit:Connect(function(hit)
+		local model = hit.Parent
+		local human = model:FindFirstChild("Humanoid")
+		local health = model:FindFirstChild("Health")
+		if human then
+			human.Health = human.Health - 50
+		end
+		if health then
+			health.Value = health.Value - 20
+		end
+	end)
+end
+
+
+remote.OnServerEvent:Connect(function(plr,turret,mousepos)
+	for i,v in pairs(turret:GetChildren()) do
+		if v.Name == "FirePart" then
+			print("name")
+			turret.CanFire.Value = false 
+			local raycastParams = RaycastParams.new()
+			raycastParams.FilterDescendantsInstances = {turret.Parent.Parent}
+			raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+			local direction = ((mousepos - turret.REALturret.Position).Unit * 1500)
+			local raycastResult = workspace:Raycast( turret.REALturret.Position,direction,raycastParams) -- raycast 1500 studs distance to players mouse from turrets position
+			if raycastResult then
+
+				print("test")
+				v.Sound:Play()
+				v.Fire.Enabled = true
+				v.Smoke.Enabled = true
+				v.FireLight.Enabled = true
+				create_explosion(raycastResult.Position)
+				local clon = bullethole:Clone() -- clone bullet
+
+				clon.CFrame = CFrame.new(raycastResult.Position,raycastResult.Position+raycastResult.Normal)
+				clon.Parent = workspace
+				debris_service:AddItem(clon,7)
+				local cor = coroutine.create(function() 
+					wait(0.35)
+					turret.Reload:Play()
+					v.Fire.Enabled = false
+					v.Smoke.Enabled = false
+					v.FireLight.Enabled = false
+					wait(turret:GetAttribute("ReloadTime"))
+					turret.CanFire.Value = true -- turret can fire again
+				end)
+				coroutine.resume(cor)
+			end
+		end
+	end
+end)
+
+local missile_remote = game.ReplicatedStorage.MissileFire
+missile_remote.OnServerEvent:Connect(function(plr,turret,mousepos)
+	turret.Missile.Transparency = 1 -- set the visual missile invisible
+	turret.Missile.Launch:Play()
+	turret.CanFire.Value = false
+	local cl = missile:Clone()
+	cl.Launcher.Value = turret.Parent.Parent
+	cl.TargetPosition.Value = mousepos
+	cl.CFrame = turret.Missile.CFrame
+	cl.Parent = workspace
+	wait(turret:GetAttribute("Reload"))
+	turret.CanFire.Value = true
+	turret.Missile.Transparency = 0
+end)
