@@ -1,0 +1,182 @@
+-- all npcs use this script
+local NPC = script.Parent
+local human = NPC.Humanoid
+local torso = NPC.Torso
+local smokepart = NPC.SmokePart
+
+local pathfindingservice = game:GetService("PathfindingService")
+
+--NPC.Hold:Play()
+
+local animator = human:WaitForChild("Animator")
+animator:LoadAnimation(NPC.Hold):Play()
+
+local enemy_folder = NPC.Enemy_Folder.Value
+local TargetPosition = NPC.Target_Part.Value.Position
+local load_module = require(game.ServerStorage.Battleship_module)
+
+local bodygyro = NPC.HumanoidRootPart.AlignOrientation -- bodygyro lol
+
+local walking = false
+local break_walking = false
+
+local range = NPC:GetAttribute("Range")
+local damage = NPC:GetAttribute("Damage")
+local Firerate = NPC:GetAttribute("Firerate")
+
+local canfire = true
+
+local function compare_distance(pos1,pos2)
+	return (pos1-pos2).magnitude
+end
+
+NPC.PrimaryPart:SetNetworkOwner(nil)
+
+local function see(base,part,folder)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {folder}
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	local raycastResult = workspace:Raycast(base.Position, (part.Position - base.Position).Unit * 3000, raycastParams)
+	if raycastResult then
+		local hitpart = raycastResult.Instance
+		print(hitpart)
+		print(hitpart.Parent)
+		if hitpart:IsDescendantOf(part.Parent) == true then
+			print("i should return!")
+			return true
+		end
+	end
+	return false
+end
+
+
+local function find_enemy()
+	local target = nil
+	local alive_enemies = {}
+	local see_enemies = {}
+	local enemies = enemy_folder:GetChildren()
+	-- search specific folders instead of the workspace to save resources
+	--- for noobs and zombies only!!!
+	for i,v in ipairs(game.Workspace.Humans:GetChildren()) do 
+		table.insert(enemies,v)
+	end
+	if game.Workspace:FindFirstChild("Aircraft_carrier") then
+		table.insert(enemies,game.Workspace.Aircraft_carrier)
+	end
+	--- !!!!! ---- 
+	
+	for i,v in ipairs(enemy_folder:GetChildren()) do
+		local humano = v:FindFirstChild("Humanoid")
+		local health = v:FindFirstChild("Health")
+		if humano  or health then
+			if humano then
+				if humano.Health > 0 then
+					table.insert(alive_enemies,v)
+				end
+			else
+				if health.Value > 0 then
+					table.insert(alive_enemies,v)
+				end
+			end
+		end
+	end
+
+	local range_2 = range
+	for i,v in ipairs(alive_enemies) do
+		local dis = compare_distance(torso.Position,v.Torso.Position)
+		print("comparing distance")
+		if dis < range_2 then
+			range_2 = dis
+			target = v
+		end
+	end
+	return target
+end
+
+local function pathfind_to(targetpos)
+	walking = true
+	local path = pathfindingservice:CreatePath()
+	path:ComputeAsync(torso.Position,targetpos)
+	local waypoints = path:GetWaypoints()
+	for i,v in ipairs(waypoints) do
+		if break_walking == true then -- this is to break from this loop when the NPC needs to stop
+			break
+		end
+		human:MoveTo(v.Position)
+		if v.Action == Enum.PathWaypointAction.Jump then
+			human.Jump = true
+		end
+		human.MoveToFinished:Wait(compare_distance(torso.Position,v.Position))
+	end
+	walking = false
+end
+
+local function shoot(target)
+	local cl = CFrame.new(torso.Position,target.Torso.Position)
+
+	bodygyro.CFrame = cl
+	canfire = false
+	smokepart.FlashFX.Enabled = true
+	smokepart.OverHeat.Enabled = true
+	smokepart["FlashFX[Flash]"].Enabled = true
+	smokepart.Smoke.Enabled = true
+	smokepart.Smoke2.Enabled = true
+	smokepart.Sound:Play()
+	canfire = false
+	local human4 = target:FindFirstChild("Humanoid")
+	local health = target:FindFirstChild("Health")
+	if human4 then
+		human4.Health = human4.Health - damage
+	end
+	if health then
+		health.Value = health.Value - damage
+	end
+	
+	wait(0.25)
+	smokepart.FlashFX.Enabled = false
+	smokepart.OverHeat.Enabled = false
+	smokepart["FlashFX[Flash]"].Enabled = false
+	smokepart.Smoke.Enabled = false
+	smokepart.Smoke2.Enabled = false
+	
+		
+	wait(Firerate)
+	canfire = true
+end
+
+human.Died:Connect(function()
+	game.ReplicatedStorage.Death_event:FireAllClients(NPC)
+	local sounds = NPC["Left Arm"]:GetChildren()
+	sounds[math.random(1,#sounds)]:Play()
+	wait(7)
+	NPC:Destroy()
+end)
+
+while wait(2) do
+	if human.Health < 1 then -- when npc is ded
+		return
+	end
+	local target = find_enemy()
+	if target == nil then -- if there isnt a target
+		break_walking = false -- stop walking
+		if walking == false then
+			local coro = coroutine.create(function()
+				pathfind_to(TargetPosition)
+			end)
+			coroutine.resume(coro) -- we run the pathfind in a cororoutine to not distrupt shooting
+		end
+
+		
+	else
+		print("firing")-- found a enemy
+		break_walking = true
+		if walking == true then
+			human:MoveTo(torso.Position)
+		end
+		if canfire == true then
+			shoot(target) -- go pew pew
+		end
+		
+		
+	end
+end
