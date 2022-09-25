@@ -41,7 +41,7 @@ local Missile_Remote = game.ReplicatedStorage:WaitForChild("MissileFire")
 
 local function move_forward()
 	print(current_speed)
-	if current_speed < max_forward_speed then
+	if current_speed < max_forward_speed then -- make sure current speed is lower than max speed
 		current_speed =current_speed + speed_per_press
 		carrier_engine_sound.PlaybackSpeed = carrier_engine_sound.PlaybackSpeed + 0.5
 	end
@@ -53,9 +53,9 @@ end
 
 local function move_backward()
 	print(current_speed)
-	if current_speed > -max_forward_speed then
-		current_speed = current_speed-speed_per_press
-		carrier_engine_sound.PlaybackSpeed = carrier_engine_sound.PlaybackSpeed - 0.5
+	if current_speed > -max_forward_speed then -- make sure current speed is not lower than negative max speed
+		current_speed = current_speed-speed_per_press -- set speed
+		carrier_engine_sound.PlaybackSpeed = carrier_engine_sound.PlaybackSpeed - 0.5 -- change playback speed
 	end
 	
 	--Forward_Remote:FireServer(carrier,current_speed)
@@ -63,13 +63,13 @@ end
 
 local function Fire_missile()
 	local fire_table = {}
-	for i,v in ipairs(carrier.Hellfires:GetChildren()) do
+	for i,v in ipairs(carrier.Hellfires:GetChildren()) do -- get all hellfires that can fire
 		if v.CanFire.Value == true then
 			table.insert(fire_table,v)
 		end
 	end
-	if #fire_table > 0 then
-		Missile_Remote:FireServer(fire_table[math.random(1,#fire_table)],mouse.Hit.Position)
+	if #fire_table > 0 then-- make sure its more than 0
+		Missile_Remote:FireServer(fire_table[math.random(1,#fire_table)],mouse.Hit.Position) -- remote
 	end
 	
 end
@@ -80,7 +80,7 @@ local holding_mouse = false
 
 local function horn()
 	if horn_cooldown == false then
-		carrier_base.Horn:Play()
+		carrier_base.Horn:Play() -- horn
 		horn_cooldown = true
 		wait(10)
 		horn_cooldown = false
@@ -89,41 +89,42 @@ end
 
 local function shoot()
 	local can_shoot = {}
-	for i,v in ipairs(all_turrets) do
+	for i,v in ipairs(all_turrets) do -- get turrets that can fire
 		if v.CanFire.Value == true then
 			table.insert(can_shoot,v)
 		end
 	end
-	if #can_shoot > 0 then
-		local turret_shoot = can_shoot[math.random(1,#can_shoot)]
-		print("ifire")
-		TurretFire_Remote:FireServer(turret_shoot,mouse.Hit.Position)
+	if #can_shoot > 0 then -- make sure there are more than 0
+		local turret_shoot = can_shoot[math.random(1,#can_shoot)] -- get a random turret
+		print("ifire") 
+		TurretFire_Remote:FireServer(turret_shoot,mouse.Hit.Position) -- fire remote
 	end
 end
 
-start_button.Activated:Connect(function()
+start_button.Activated:Connect(function() -- when player starts
 	carrier_engine_sound:Play()
-	all_turrets = carrier_turrets:GetChildren()
+	all_turrets = carrier_turrets:GetChildren() -- get all the turrets
 	carrier_turrets.ChildAdded:Connect(function(ins)
-		table.insert(ins,all_turrets)
+		table.insert(ins,all_turrets) -- just in case game loaded late
 	end)
 	
-	start_gui.Enabled = false
-	camera.CameraSubject = carrier:WaitForChild("Camera_carrier")
-	ContextActionService:BindAction(ACTION_FORWARD, move_forward, true, Enum.KeyCode.W)
+	start_gui.Enabled = false -- disable gui
+	camera.CameraSubject = carrier:WaitForChild("Camera_carrier") -- set camera
+	-- use contextaction to set actions that dont need repeat loops
+	ContextActionService:BindAction(ACTION_FORWARD, move_forward, true, Enum.KeyCode.W) -- set actions
 	ContextActionService:BindAction(ACTION_BACKWARD, move_backward, true, Enum.KeyCode.S)
 	ContextActionService:BindAction(ACTION_FIREMISSILE,Fire_missile,true,Enum.KeyCode.F)
 	ContextActionService:BindAction(ACTION_HORN,horn,true,Enum.KeyCode.H)
 	local movement_cor = coroutine.create(function()
 		while true do
-			Forward_Remote:FireServer(carrier,current_speed)
+			Forward_Remote:FireServer(carrier,current_speed) -- set speed
 						
 			wait(0.01)
 		end
 	end)
 	local turret_cor = coroutine.create(function()
 		while wait(0.1) do
-		 	TurretR_Remote:FireServer(carrier,mouse.Hit)
+		 	TurretR_Remote:FireServer(carrier,mouse.Hit) -- constantly turn players turrets to mouses location
 		end
 	end)
 	coroutine.resume(turret_cor)
@@ -131,31 +132,31 @@ start_button.Activated:Connect(function()
 	userinputservice.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			holding_mouse = true
-			print(holding_mouse)
+			print(holding_mouse) 
 			repeat
 				print("test")
 				shoot()
-				
+				 
 				wait(Fire_Cooldown.Value)
 				
-			until holding_mouse == false
+			until holding_mouse == false -- continue shooting until player releases the button
 		end
 		if input.KeyCode == Enum.KeyCode.D then
 			holding_D = true
 			repeat
-				Turn_Remote:FireServer(-rotation_per_hold,carrier)
+				Turn_Remote:FireServer(-rotation_per_hold,carrier) -- send a remote to server to change carriers bodygyro
 				wait(rotation_speed)
 			until holding_D == false
 		end
 		if input.KeyCode == Enum.KeyCode.A then
 			holding_A = true
 			repeat
-				Turn_Remote:FireServer(rotation_per_hold,carrier)
+				Turn_Remote:FireServer(rotation_per_hold,carrier)-- send a remote to server to change carriers bodygyro
 				wait(rotation_speed)
 			until holding_A == false
 		end
 	end)
-	userinputservice.InputEnded:Connect(function(input)
+	userinputservice.InputEnded:Connect(function(input) -- to see when player releases buttons
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			holding_mouse = false
 		end
